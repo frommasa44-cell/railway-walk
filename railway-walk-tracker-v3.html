@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="鉄道ウォーク">
+<title>鉄道ウォーキングトラッカー</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+:root {
+  --rail:#e8380d;--rail-dark:#b02a09;--bg:#0d0d1a;--surface:#16162a;
+  --surface2:#1e1e35;--surface3:#252540;--text:#f0f0ff;--text-dim:#7777aa;
+  --text-mid:#aaaac8;--accent:#f5c842;--green:#4ade80;--blue:#60a5fa;
+  --border:rgba(255,255,255,0.07);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP',sans-serif;min-height:100vh;overscroll-behavior:none;}
+
+/* タブバー */
+.tab-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(13,13,26,0.96);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--border);display:flex;z-index:50;padding-bottom:env(safe-area-inset-bottom);}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 4px 8px;background:none;border:none;color:var(--text-dim);font-family:'Noto Sans JP',sans-serif;font-size:10px;cursor:pointer;transition:color 0.15s;}
+.tab-btn.active{color:var(--rail);}
+.tab-btn .icon{font-size:22px;line-height:1;}
+
+/* ページ */
+.page{display:none;padding:0 0 calc(80px + env(safe-area-inset-bottom));min-height:100vh;}
+.page.active{display:block;}
+.page-header{padding:calc(env(safe-area-inset-top)+16px) 16px 14px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;}
+.page-title{font-size:20px;font-weight:900;letter-spacing:-0.02em;}
+.page-subtitle{font-size:12px;color:var(--text-dim);margin-top:2px;}
+.scroll-area{padding:14px 14px 0;}
+
+/* カード */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:12px;}
+.card-label{font-size:10px;font-weight:700;letter-spacing:0.15em;color:var(--text-dim);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:6px;}
+.card-label::before{content:'';width:3px;height:12px;background:var(--rail);border-radius:2px;display:inline-block;}
+
+/* ウォーキングボタン */
+.walk-hero{text-align:center;padding:8px 0 4px;}
+.walk-status{font-size:12px;color:var(--text-dim);letter-spacing:0.1em;margin-bottom:14px;}
+.start-btn{width:150px;height:150px;border-radius:50%;border:none;background:var(--rail);color:white;font-family:'Noto Sans JP',sans-serif;font-size:16px;font-weight:900;letter-spacing:0.05em;cursor:pointer;transition:all 0.2s;box-shadow:0 0 40px rgba(232,56,13,0.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;margin:0 auto;}
+.start-btn .btn-icon{font-size:40px;}
+.start-btn.active{background:#0e2e18;box-shadow:0 0 40px rgba(74,222,128,0.35);border:2px solid var(--green);}
+.start-btn:active{transform:scale(0.94);}
+.timer-display{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:var(--accent);letter-spacing:0.05em;margin-top:20px;display:none;}
+.timer-display.show{display:block;}
+.step-live{font-size:14px;color:var(--text-mid);margin-top:8px;display:none;}
+.step-live.show{display:block;}
+.step-live strong{color:var(--accent);font-family:'JetBrains Mono',monospace;}
+
+/* 入力 */
+.input-label{font-size:11px;color:var(--text-dim);margin-bottom:6px;}
+input[type="number"],input[type="text"]{width:100%;background:var(--surface2);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;padding:12px 14px;outline:none;-webkit-appearance:none;transition:border-color 0.15s;}
+input[type="text"]{font-family:'Noto Sans JP',sans-serif;font-size:15px;}
+input:focus{border-color:var(--rail);}
+input[type="number"]::-webkit-inner-spin-button{display:none;}
+.unit-label{font-size:14px;color:var(--text-dim);padding-bottom:14px;}
+.row{display:flex;gap:10px;align-items:flex-end;margin-bottom:10px;}
+
+/* ボタン */
+.btn{background:var(--rail);color:white;border:none;border-radius:12px;font-family:'Noto Sans JP',sans-serif;font-size:15px;font-weight:700;padding:15px;cursor:pointer;width:100%;letter-spacing:0.03em;transition:all 0.15s;-webkit-appearance:none;}
+.btn:active{opacity:0.8;transform:scale(0.98);}
+.btn.sec{background:var(--surface3);color:var(--text-mid);}
+.btn.sm{font-size:13px;padding:10px;}
+
+/* 現在地ヒーロー */
+.location-hero{background:linear-gradient(135deg,#1a0806,#2a1008);border:1px solid rgba(232,56,13,0.25);border-radius:16px;padding:22px 18px;margin-bottom:12px;text-align:center;}
+.loc-eyebrow{font-size:10px;letter-spacing:0.2em;color:var(--text-dim);margin-bottom:8px;}
+.loc-station{font-size:clamp(20px,6vw,34px);font-weight:900;color:var(--accent);line-height:1.15;margin-bottom:8px;}
+.loc-next{font-size:13px;color:var(--text-mid);}
+.loc-next strong{color:var(--text);}
+
+/* 統計 */
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.stat-box{background:var(--surface2);border-radius:12px;padding:14px 8px;text-align:center;}
+.stat-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--accent);}
+.stat-lbl{font-size:10px;color:var(--text-dim);margin-top:3px;letter-spacing:0.05em;}
+
+/* プログレス */
+.prog-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.prog-name{font-size:12px;color:var(--text-dim);}
+.prog-pct{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent);font-weight:700;}
+.progress-bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--rail),var(--accent));border-radius:3px;transition:width 0.6s cubic-bezier(0.34,1.56,0.64,1);}
+.prog-sub{font-size:11px;color:var(--text-dim);margin-top:4px;}
+
+/* 駅リスト */
+.stn-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);}
+.stn-item:last-child{border-bottom:none;}
+.stn-dot{width:10px;height:10px;border-radius:50%;background:var(--surface3);flex-shrink:0;}
+.stn-item.passed .stn-dot{background:var(--green);}
+.stn-item.current .stn-dot{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 4px var(--accent);}50%{box-shadow:0 0 14px var(--accent),0 0 24px rgba(245,200,66,0.3);}}
+.stn-name{font-size:14px;flex:1;}
+.stn-item.passed .stn-name{color:var(--text-mid);}
+.stn-item.current .stn-name{color:var(--accent);font-weight:700;}
+.stn-km{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+.stn-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;}
+.badge-pass{background:rgba(74,222,128,0.12);color:var(--green);}
+.badge-cur{background:rgba(245,200,66,0.12);color:var(--accent);}
+
+/* 路線選択 */
+.region-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;}
+.region-tabs::-webkit-scrollbar{display:none;}
+.region-tab{flex-shrink:0;background:var(--surface3);border:1px solid var(--border);border-radius:20px;color:var(--text-mid);font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;padding:6px 14px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.region-tab.active{background:var(--rail);border-color:var(--rail);color:white;}
+.line-item{background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all 0.15s;margin-bottom:8px;}
+.line-item:active{opacity:0.7;}
+.line-item.selected{border-color:var(--rail);background:rgba(232,56,13,0.06);}
+.line-color-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+.line-info{flex:1;}
+.line-name-text{font-size:14px;font-weight:700;}
+.line-meta{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.line-check{color:var(--rail);font-size:18px;opacity:0;}
+.line-item.selected .line-check{opacity:1;}
+
+/* ログ */
+.log-item{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.log-item:last-child{border-bottom:none;}
+.log-memo{font-size:13px;}
+.log-date{font-size:11px;color:var(--text-dim);margin-top:2px;}
+.log-km{font-family:'JetBrains Mono',monospace;font-size:15px;color:var(--accent);font-weight:700;}
+
+/* 設定 */
+.shortcut-step{display:flex;gap:12px;margin-bottom:18px;}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--rail);color:white;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px;}
+.step-title{font-size:14px;font-weight:700;margin-bottom:4px;}
+.step-desc{font-size:12px;color:var(--text-dim);line-height:1.7;}
+code{background:var(--surface3);border-radius:4px;padding:1px 6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent);}
+.code-block{background:var(--surface3);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);word-break:break-all;line-height:1.6;margin:8px 0;cursor:pointer;position:relative;}
+.code-block::after{content:'タップでコピー';position:absolute;top:6px;right:8px;font-size:9px;color:var(--text-dim);font-family:'Noto Sans JP',sans-serif;}
+.notice{background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--blue);line-height:1.6;margin-bottom:12px;}
+.notice-green{background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--green);line-height:1.6;margin-bottom:12px;}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+
+/* 空状態 */
+.empty{text-align:center;padding:40px 20px;color:var(--text-dim);}
+.empty-icon{font-size:40px;margin-bottom:10px;}
+.empty-txt{font-size:13px;line-height:1.6;}
+
+/* スクロールバー */
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- ホームページ -->
+<div class="page active" id="page-home">
+  <div class="page-header">
+    <div class="page-title">🚃 鉄道ウォーク</div>
+    <div class="page-subtitle" id="selectedLineName">路線未選択 — 「路線」タブから選んでください</div>
+  </div>
+  <div class="scroll-area">
+
+    <!-- ウォーキングボタン（タイマー） -->
+    <div class="card">
+      <div class="card-label">ウォーキング（タイマー）</div>
+      <div class="walk-hero">
+        <div class="walk-status" id="walkStatus">タップして開始</div>
+        <button class="start-btn" id="startBtn" onclick="toggleWalk()">
+          <span class="btn-icon" id="startIcon">🚶</span>
+          <span id="startLabel">開始</span>
+        </button>
+        <div class="timer-display" id="timerDisplay">00:00</div>
+        <div class="step-live" id="stepLive">今回の歩数: <strong id="stepVal">—</strong></div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:14px;line-height:1.6;">
+        ⚡ Shortcutsと連携すると歩数を自動取得できます<br>
+        設定方法は「設定」タブをご確認ください
+      </div>
+    </div>
+
+    <!-- 手動入力 -->
+    <div class="card">
+      <div class="card-label">距離を手動で入力</div>
+      <div class="row">
+        <div style="flex:1;">
+          <div class="input-label">歩いた距離 (km)</div>
+          <input type="number" id="kmInput" placeholder="0.0" step="0.1" min="0" inputmode="decimal">
+        </div>
+        <div class="unit-label">km</div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div class="input-label">メモ（任意）</div>
+        <input type="text" id="memoInput" placeholder="朝の散歩、会社帰りなど">
+      </div>
+      <button class="btn" onclick="addManual()">📍 記録する</button>
+    </div>
+
+    <!-- 現在地 -->
+    <div id="locationSection" style="display:none;">
+      <div class="location-hero">
+        <div class="loc-eyebrow">現在地</div>
+        <div class="loc-station" id="locStation">—</div>
+        <div class="loc-next" id="locNext"></div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box"><div class="stat-val" id="statKm">0.0</div><div class="stat-lbl">累計 km</div></div>
+        <div class="stat-box"><div class="stat-val" id="statStn">0</div><div class="stat-lbl">通過駅数</div></div>
+        <div class="stat-box"><div class="stat-val" id="statDays">0</div><div class="stat-lbl">記録日数</div></div>
+      </div>
+      <div class="card">
+        <div class="prog-head">
+          <span class="prog-name" id="progName">進捗</span>
+          <span class="prog-pct" id="progPct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
+        <div class="prog-sub" id="progSub"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">駅リスト</div>
+        <div id="stationList"></div>
+      </div>
+    </div>
+
+    <div id="noLineMsg" class="card">
+      <div class="empty">
+        <div class="empty-icon">🗺️</div>
+        <div class="empty-txt">「路線」タブから<br>歩く路線を選んでください</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 路線選択ページ -->
+<div class="page" id="page-lines">
+  <div class="page-header">
+    <div class="page-title">路線を選ぶ</div>
+    <div class="page-subtitle">地域タブを切り替えてタップで選択</div>
+  </div>
+  <div class="scroll-area">
+    <div class="region-tabs" id="regionTabs"></div>
+    <div id="lineList"></div>
+  </div>
+</div>
+
+<!-- ログページ -->
+<div class="page" id="page-log">
+  <div class="page-header">
+    <div class="page-title">歩行ログ</div>
+    <div class="page-subtitle" id="logSubtitle">記録なし</div>
+  </div>
+  <div class="scroll-area">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button class="btn sec sm" style="width:auto;padding:10px 16px;" onclick="resetAll()">🗑️ 全リセット</button>
+      <button class="btn sec sm" style="width:auto;padding:10px 16px;" onclick="undoLast()">↩️ 最後を取り消す</button>
+    </div>
+    <div class="card" id="logContainer"></div>
+  </div>
+</div>
+
+<!-- 設定・Shortcuts連携ページ -->
+<div class="page" id="page-settings">
+  <div class="page-header">
+    <div class="page-title">設定 / Shortcuts連携</div>
+    <div class="page-subtitle">歩幅設定と自動歩数取得の設定</div>
+  </div>
+  <div class="scroll-area">
+
+    <!-- 歩幅設定 -->
+    <div class="card">
+      <div class="card-label">歩幅の設定</div>
+      <div class="row">
+        <div style="flex:1;">
+          <div class="input-label">1歩あたりの距離 (cm)　現在: <span id="currentStride">75</span>cm</div>
+          <input type="number" id="strideInput" placeholder="75" inputmode="decimal">
+        </div>
+        <div class="unit-label">cm</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;line-height:1.7;">
+        目安：身長(cm) × 0.45<br>
+        例 → 身長160cm：72cm ／ 170cm：76cm ／ 180cm：81cm
+      </div>
+      <button class="btn" onclick="saveStride()">💾 保存する</button>
+    </div>
+
+    <!-- Shortcuts連携の仕組み説明 -->
+    <div class="notice">
+      💡 iOSのセキュリティ制限により、Webアプリはヘルスケアに直接アクセスできません。<br>
+      Shortcutsアプリで「開始」「停止」の2つのショートカットを作ることで、<strong>歩数を自動的にこのアプリに渡せます。</strong>
+    </div>
+
+    <!-- 仕組み図 -->
+    <div class="card">
+      <div class="card-label">連携の仕組み</div>
+      <div style="font-size:13px;line-height:2;color:var(--text-mid);">
+        🟢 <strong style="color:var(--text);">開始ショートカット実行</strong><br>
+        　　↓ ヘルスケアから「今日の累計歩数」を取得<br>
+        　　↓ その数値を「開始歩数」としてこのアプリに記録<br>
+        🚶 ウォーキング<br>
+        🔴 <strong style="color:var(--text);">停止ショートカット実行</strong><br>
+        　　↓ 再び「今日の累計歩数」を取得<br>
+        　　↓ （停止歩数 − 開始歩数）× 歩幅 ＝ 距離(km)<br>
+        　　↓ <strong style="color:var(--green);">自動でアプリに記録 ✓</strong>
+      </div>
+    </div>
+
+    <!-- ショートカット作成手順 -->
+    <div class="card">
+      <div class="card-label">① 開始ショートカットの作り方</div>
+
+      <div class="shortcut-step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Shortcutsアプリを開く</div>
+          <div class="step-desc">iPhoneに標準搭載。ホーム画面またはAppライブラリから「ショートカット」を検索して開く。</div>
+        </div>
+      </div>
+
+      <div class="shortcut-step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">新規ショートカットを作成</div>
+          <div class="step-desc">右上の <code>＋</code> をタップ → 画面上部の「新規ショートカット」という名前をタップして <code>鉄道ウォーク開始</code> に変更する。</div>
+        </div>
+      </div>
+
+      <div class="shortcut-step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">「ヘルスケアのサンプルを取得」を追加</div>
+          <div class="step-desc">
+            「アクションを追加」をタップ → 検索欄に <code>ヘルスケア</code> と入力 → 「ヘルスケアのサンプルを取得」をタップ<br><br>
+            アクションが追加されたら以下のように設定：<br>
+            ・<strong>種類</strong>：「歩数」<br>
+            ・<strong>期間</strong>：「今日」<br>
+            ・<strong>集計</strong>：「合計」（デフォルトのまま）
+          </div>
+        </div>
+      </div>
+
+      <div class="shortcut-step">
+        <div class="step-num">4</div>
+        <div>
+          <div class="step-title">「URLを開く」を追加</div>
+          <div class="step-desc">
+            再度「アクションを追加」→ 検索欄に <code>URLを開く</code> と入力してタップ<br><br>
+            URL欄をタップして以下を入力（下のボックスをタップでコピー）：
+            <div class="code-block" onclick="copyText(this, 'rwalk://x-callback-url/record?action=start&steps=')">rwalk://x-callback-url/record?action=start&steps=</div>
+            URL入力後、カーソルを末尾に置いたまま、キーボード上の <code>変数</code> または画面上の青い「ヘルスケアのサンプル」をタップして末尾に追加する。<br>
+            完成形：<code>rwalk://...&steps=<span style="color:var(--blue);">[ヘルスケアのサンプル]</span></code>
+          </div>
+        </div>
+      </div>
+
+      <div class="shortcut-step">
+        <div class="step-num">5</div>
+        <div>
+          <div class="step-title">保存して完了</div>
+          <div class="step-desc">右上の「完了」をタップ。ショートカット一覧に「鉄道ウォーク開始」が追加される。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">② 停止ショートカットの作り方</div>
+      <div style="font-size:13px;color:var(--text-mid);line-height:1.7;margin-bottom:12px;">
+        開始と<strong style="color:var(--text);">全く同じ手順</strong>で作成し、以下の2点だけ変えます：<br><br>
+        ・名前：<code>鉄道ウォーク停止</code><br>
+        ・URLの <code>action=start</code> を <code>action=stop</code> に変える
+      </div>
+      <div class="code-block" onclick="copyText(this, 'rwalk://x-callback-url/record?action=stop&steps=')">rwalk://x-callback-url/record?action=stop&steps=</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">③ ホーム画面ウィジェットに追加（推奨）</div>
+      <div class="shortcut-step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">ホーム画面を長押し</div>
+          <div class="step-desc">アイコンが揺れたら左上の <code>＋</code> をタップ</div>
+        </div>
+      </div>
+      <div class="shortcut-step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">ショートカットのウィジェットを追加</div>
+          <div class="step-desc">「ショートカット」を検索 → 小さいサイズのウィジェットを選んで「ウィジェットを追加」→ ウィジェットをタップして表示するショートカットを「鉄道ウォーク開始」に設定</div>
+        </div>
+      </div>
+      <div class="shortcut-step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">停止用も同様に追加</div>
+          <div class="step-desc">同じ手順でもう1つウィジェットを追加して「鉄道ウォーク停止」に設定。これでホーム画面からワンタップで開始・停止できます。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- テスト機能 -->
+    <div class="card">
+      <div class="card-label">動作テスト（Shortcuts不要）</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;line-height:1.6;">
+        ショートカットが完成したら、まずここで動作確認できます。<br>
+        開始歩数と停止歩数を入力して「テスト記録」をタップしてください。
+      </div>
+      <div class="row">
+        <div style="flex:1;">
+          <div class="input-label">開始歩数</div>
+          <input type="number" id="testStart" placeholder="10000" inputmode="numeric">
+        </div>
+        <div style="flex:1;">
+          <div class="input-label">停止歩数</div>
+          <input type="number" id="testStop" placeholder="12000" inputmode="numeric">
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px;" id="testPreview">差分: — 歩 ≈ — km</div>
+      <button class="btn sec" onclick="testRecord()">🧪 テスト記録</button>
+    </div>
+
+    <!-- このアプリのURL -->
+    <div class="card">
+      <div class="card-label">このアプリのURL（ブックマーク用）</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">ファイルをSafariで開いているURLをコピーして、Shortcutsで「URLを開く」として追加すれば、ショートカット実行後に自動でこのアプリが開きます。</div>
+      <div class="code-block" id="appUrlBlock" onclick="copyAppUrl(this)">（このページのURLを表示）</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- タブバー -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('home',this)"><span class="icon">🏠</span>ホーム</button>
+  <button class="tab-btn" onclick="switchTab('lines',this)"><span class="icon">🗺️</span>路線</button>
+  <button class="tab-btn" onclick="switchTab('log',this)"><span class="icon">📋</span>ログ</button>
+  <button class="tab-btn" onclick="switchTab('settings',this)"><span class="icon">⚙️</span>設定</button>
+</div>
+
+<script>
+// ============================================================
+// 路線データ
+// ============================================================
+const REGIONS = {
+  kanto_jr:{label:'関東 JR',lines:{
+    yamanote:{name:'山手線',color:'#9acd32',total:34.5,stations:[
+      {n:'品川',k:0.0},{n:'大崎',k:2.0},{n:'五反田',k:3.4},{n:'目黒',k:4.7},{n:'恵比寿',k:6.0},{n:'渋谷',k:7.4},{n:'原宿',k:8.7},{n:'代々木',k:9.9},{n:'新宿',k:11.0},{n:'新大久保',k:12.2},{n:'高田馬場',k:13.4},{n:'目白',k:14.5},{n:'池袋',k:15.6},{n:'大塚',k:17.0},{n:'巣鴨',k:18.2},{n:'駒込',k:19.4},{n:'田端',k:20.6},{n:'西日暮里',k:21.5},{n:'日暮里',k:22.1},{n:'鶯谷',k:23.0},{n:'上野',k:24.0},{n:'御徒町',k:24.7},{n:'秋葉原',k:25.5},{n:'神田',k:26.4},{n:'東京',k:27.6},{n:'有楽町',k:28.6},{n:'新橋',k:29.7},{n:'浜松町',k:30.8},{n:'田町',k:32.1},{n:'高輪ゲートウェイ',k:33.2}
+    ]},
+    chuo:{name:'中央線（東京〜高尾）',color:'#e53935',total:47.4,stations:[
+      {n:'東京',k:0.0},{n:'神田',k:1.3},{n:'御茶ノ水',k:2.6},{n:'四ツ谷',k:5.1},{n:'新宿',k:7.8},{n:'中野',k:11.4},{n:'高円寺',k:13.0},{n:'阿佐ケ谷',k:14.1},{n:'荻窪',k:15.4},{n:'西荻窪',k:17.0},{n:'吉祥寺',k:18.8},{n:'三鷹',k:20.2},{n:'武蔵境',k:22.4},{n:'東小金井',k:24.0},{n:'武蔵小金井',k:25.4},{n:'国分寺',k:27.3},{n:'西国分寺',k:28.3},{n:'国立',k:29.8},{n:'立川',k:32.0},{n:'日野',k:35.5},{n:'豊田',k:37.8},{n:'八王子',k:41.5},{n:'西八王子',k:44.7},{n:'高尾',k:47.4}
+    ]},
+    keihin:{name:'京浜東北線（大宮〜大船）',color:'#00b2e5',total:79.5,stations:[
+      {n:'大宮',k:0.0},{n:'さいたま新都心',k:2.3},{n:'与野',k:3.8},{n:'北浦和',k:5.3},{n:'浦和',k:7.0},{n:'南浦和',k:8.8},{n:'蕨',k:11.0},{n:'西川口',k:12.6},{n:'川口',k:14.0},{n:'赤羽',k:16.6},{n:'東十条',k:18.4},{n:'王子',k:19.9},{n:'上中里',k:21.0},{n:'田端',k:22.3},{n:'西日暮里',k:23.2},{n:'日暮里',k:23.8},{n:'鶯谷',k:24.7},{n:'上野',k:25.7},{n:'御徒町',k:26.4},{n:'秋葉原',k:27.2},{n:'神田',k:28.1},{n:'東京',k:29.3},{n:'有楽町',k:30.3},{n:'新橋',k:31.4},{n:'浜松町',k:32.5},{n:'田町',k:33.8},{n:'高輪ゲートウェイ',k:34.9},{n:'品川',k:36.0},{n:'大井町',k:38.6},{n:'大森',k:40.7},{n:'蒲田',k:43.1},{n:'川崎',k:47.2},{n:'鶴見',k:51.0},{n:'新子安',k:53.1},{n:'東神奈川',k:54.7},{n:'横浜',k:56.8},{n:'桜木町',k:58.7},{n:'関内',k:59.9},{n:'石川町',k:61.5},{n:'山手',k:63.0},{n:'根岸',k:64.5},{n:'磯子',k:66.1},{n:'新杉田',k:67.8},{n:'洋光台',k:69.5},{n:'港南台',k:71.4},{n:'本郷台',k:73.5},{n:'大船',k:76.4}
+    ]},
+    tokaido:{name:'東海道本線（東京〜熱海）',color:'#f77f00',total:104.6,stations:[
+      {n:'東京',k:0.0},{n:'新橋',k:2.0},{n:'品川',k:6.8},{n:'川崎',k:18.2},{n:'横浜',k:28.8},{n:'保土ケ谷',k:32.1},{n:'東戸塚',k:36.0},{n:'戸塚',k:40.9},{n:'大船',k:46.5},{n:'藤沢',k:53.2},{n:'辻堂',k:57.5},{n:'茅ヶ崎',k:61.2},{n:'平塚',k:66.0},{n:'大磯',k:70.1},{n:'二宮',k:74.4},{n:'国府津',k:79.9},{n:'鴨宮',k:83.5},{n:'小田原',k:87.3},{n:'早川',k:89.3},{n:'根府川',k:92.4},{n:'真鶴',k:96.5},{n:'湯河原',k:101.5},{n:'熱海',k:104.6}
+    ]},
+    yokosuka:{name:'横須賀線（東京〜久里浜）',color:'#004b8d',total:65.7,stations:[
+      {n:'東京',k:0.0},{n:'新橋',k:2.0},{n:'品川',k:6.8},{n:'西大井',k:9.5},{n:'武蔵小杉',k:14.2},{n:'新川崎',k:16.9},{n:'横浜',k:23.0},{n:'保土ケ谷',k:26.3},{n:'東戸塚',k:30.2},{n:'戸塚',k:35.1},{n:'大船',k:40.7},{n:'北鎌倉',k:44.1},{n:'鎌倉',k:46.1},{n:'逗子',k:50.0},{n:'東逗子',k:52.8},{n:'田浦',k:55.0},{n:'横須賀',k:57.6},{n:'衣笠',k:61.0},{n:'久里浜',k:65.7}
+    ]},
+    sobu:{name:'総武本線（東京〜千葉）',color:'#f5c218',total:39.2,stations:[
+      {n:'東京',k:0.0},{n:'新日本橋',k:1.4},{n:'馬喰町',k:2.2},{n:'錦糸町',k:5.7},{n:'亀戸',k:7.7},{n:'平井',k:9.7},{n:'新小岩',k:11.8},{n:'小岩',k:13.7},{n:'市川',k:17.4},{n:'本八幡',k:19.6},{n:'下総中山',k:21.4},{n:'西船橋',k:23.2},{n:'船橋',k:26.3},{n:'東船橋',k:28.0},{n:'津田沼',k:30.4},{n:'幕張本郷',k:33.3},{n:'幕張',k:35.0},{n:'稲毛',k:36.4},{n:'西千葉',k:38.1},{n:'千葉',k:39.2}
+    ]},
+    saikyo:{name:'埼京線（大宮〜大崎）',color:'#007b43',total:30.3,stations:[
+      {n:'大宮',k:0.0},{n:'北与野',k:2.5},{n:'与野本町',k:4.1},{n:'南与野',k:5.7},{n:'中浦和',k:7.1},{n:'武蔵浦和',k:8.5},{n:'西浦和',k:10.3},{n:'北朝霞',k:12.1},{n:'朝霞',k:14.5},{n:'志木',k:16.2},{n:'柳瀬川',k:18.0},{n:'みずほ台',k:19.4},{n:'鶴瀬',k:20.6},{n:'ふじみ野',k:22.1},{n:'上福岡',k:24.5},{n:'新河岸',k:26.3},{n:'川越',k:28.5},{n:'川越',k:28.5},{n:'池袋',k:25.7},{n:'板橋',k:27.4},{n:'十条',k:28.6},{n:'赤羽',k:29.6},{n:'北赤羽',k:30.3}
+    ]},
+    musashino:{name:'武蔵野線（府中本町〜西船橋）',color:'#f77f00',total:71.8,stations:[
+      {n:'府中本町',k:0.0},{n:'北府中',k:2.6},{n:'西国分寺',k:5.8},{n:'新小平',k:9.5},{n:'新秋津',k:13.1},{n:'東所沢',k:17.1},{n:'新座',k:21.4},{n:'北朝霞',k:24.3},{n:'西浦和',k:27.9},{n:'武蔵浦和',k:30.0},{n:'南浦和',k:31.8},{n:'東浦和',k:33.9},{n:'東川口',k:37.2},{n:'南越谷',k:42.4},{n:'越谷レイクタウン',k:45.3},{n:'吉川',k:48.2},{n:'吉川美南',k:50.0},{n:'新三郷',k:52.9},{n:'三郷',k:55.1},{n:'南流山',k:58.2},{n:'新松戸',k:61.2},{n:'新八柱',k:65.4},{n:'東松戸',k:67.5},{n:'市川大野',k:69.5},{n:'船橋法典',k:71.0},{n:'西船橋',k:71.8}
+    ]}
+  }},
+  kanto_private:{label:'関東 私鉄',lines:{
+    tokyu_toyoko:{name:'東急東横線（渋谷〜元町・中華街）',color:'#e60027',total:28.8,stations:[
+      {n:'渋谷',k:0.0},{n:'代官山',k:1.4},{n:'中目黒',k:2.6},{n:'祐天寺',k:4.2},{n:'学芸大学',k:5.5},{n:'都立大学',k:7.0},{n:'自由が丘',k:8.6},{n:'田園調布',k:10.3},{n:'多摩川',k:11.2},{n:'新丸子',k:12.5},{n:'武蔵小杉',k:13.4},{n:'元住吉',k:15.0},{n:'日吉',k:16.8},{n:'綱島',k:18.8},{n:'大倉山',k:20.4},{n:'菊名',k:21.7},{n:'妙蓮寺',k:22.8},{n:'白楽',k:23.6},{n:'東白楽',k:24.0},{n:'横浜',k:25.4},{n:'反町',k:26.6},{n:'東神奈川',k:27.3},{n:'元町・中華街',k:28.8}
+    ]},
+    tokyu_denentoshi:{name:'東急田園都市線（渋谷〜中央林間）',color:'#00944e',total:31.5,stations:[
+      {n:'渋谷',k:0.0},{n:'池尻大橋',k:1.7},{n:'三軒茶屋',k:3.0},{n:'駒沢大学',k:4.5},{n:'桜新町',k:5.9},{n:'用賀',k:7.2},{n:'二子玉川',k:9.0},{n:'二子新地',k:10.1},{n:'高津',k:11.1},{n:'溝の口',k:12.5},{n:'梶が谷',k:13.8},{n:'宮崎台',k:15.3},{n:'宮前平',k:16.6},{n:'鷺沼',k:17.9},{n:'たまプラーザ',k:19.6},{n:'あざみ野',k:21.0},{n:'江田',k:22.6},{n:'市が尾',k:24.1},{n:'藤が丘',k:25.6},{n:'青葉台',k:27.0},{n:'田奈',k:28.7},{n:'長津田',k:30.2},{n:'つくし野',k:30.9},{n:'すずかけ台',k:31.5}
+    ]},
+    odakyu:{name:'小田急小田原線（新宿〜小田原）',color:'#0066b3',total:84.0,stations:[
+      {n:'新宿',k:0.0},{n:'南新宿',k:1.2},{n:'参宮橋',k:2.1},{n:'代々木八幡',k:2.9},{n:'代々木上原',k:3.7},{n:'東北沢',k:4.4},{n:'下北沢',k:5.1},{n:'世田谷代田',k:5.9},{n:'梅ヶ丘',k:7.0},{n:'豪徳寺',k:7.9},{n:'経堂',k:9.0},{n:'千歳船橋',k:10.4},{n:'祖師ヶ谷大蔵',k:11.7},{n:'成城学園前',k:13.2},{n:'喜多見',k:14.7},{n:'狛江',k:16.3},{n:'和泉多摩川',k:17.8},{n:'登戸',k:19.2},{n:'向ヶ丘遊園',k:20.7},{n:'生田',k:23.0},{n:'読売ランド前',k:24.6},{n:'百合ヶ丘',k:26.1},{n:'新百合ヶ丘',k:27.6},{n:'柿生',k:30.7},{n:'鶴川',k:33.8},{n:'玉川学園前',k:37.0},{n:'町田',k:40.9},{n:'相模大野',k:43.4},{n:'小田急相模原',k:46.0},{n:'相武台前',k:48.1},{n:'座間',k:50.3},{n:'海老名',k:52.7},{n:'厚木',k:54.0},{n:'本厚木',k:55.2},{n:'愛甲石田',k:58.0},{n:'伊勢原',k:61.2},{n:'鶴巻温泉',k:64.8},{n:'東海大学前',k:67.0},{n:'秦野',k:70.4},{n:'渋沢',k:74.4},{n:'新松田',k:78.9},{n:'開成',k:81.3},{n:'小田原',k:84.0}
+    ]},
+    keikyu:{name:'京急本線（品川〜浦賀）',color:'#e60012',total:66.3,stations:[
+      {n:'品川',k:0.0},{n:'北品川',k:1.1},{n:'新馬場',k:1.9},{n:'青物横丁',k:3.1},{n:'鮫洲',k:4.1},{n:'立会川',k:5.2},{n:'大森海岸',k:6.5},{n:'平和島',k:7.9},{n:'大森町',k:9.0},{n:'梅屋敷',k:10.0},{n:'京急蒲田',k:11.5},{n:'雑色',k:13.2},{n:'六郷土手',k:15.0},{n:'京急川崎',k:16.6},{n:'八丁畷',k:18.4},{n:'鶴見市場',k:20.2},{n:'京急鶴見',k:21.6},{n:'生麦',k:23.6},{n:'京急新子安',k:24.9},{n:'子安',k:25.8},{n:'神奈川新町',k:26.7},{n:'横浜',k:30.5},{n:'戸部',k:31.9},{n:'日ノ出町',k:33.2},{n:'黄金町',k:34.3},{n:'南太田',k:35.5},{n:'井土ヶ谷',k:37.0},{n:'弘明寺',k:38.5},{n:'上大岡',k:40.2},{n:'金沢文庫',k:47.4},{n:'金沢八景',k:49.2},{n:'追浜',k:51.3},{n:'横須賀中央',k:57.5},{n:'堀ノ内',k:60.7},{n:'京急久里浜',k:66.3}
+    ]},
+    seibu:{name:'西武池袋線（池袋〜飯能）',color:'#f5c218',total:47.2,stations:[
+      {n:'池袋',k:0.0},{n:'椎名町',k:1.6},{n:'東長崎',k:2.9},{n:'江古田',k:4.1},{n:'桜台',k:5.3},{n:'練馬',k:6.4},{n:'中村橋',k:7.6},{n:'富士見台',k:8.9},{n:'練馬高野台',k:10.1},{n:'石神井公園',k:11.5},{n:'大泉学園',k:13.3},{n:'保谷',k:15.7},{n:'ひばりヶ丘',k:17.9},{n:'東久留米',k:19.5},{n:'清瀬',k:21.9},{n:'秋津',k:23.9},{n:'所沢',k:26.4},{n:'西所沢',k:28.6},{n:'小手指',k:31.0},{n:'狭山ヶ丘',k:33.0},{n:'武蔵藤沢',k:35.0},{n:'稲荷山公園',k:37.0},{n:'入間市',k:39.1},{n:'仏子',k:42.1},{n:'元加治',k:44.6},{n:'飯能',k:47.2}
+    ]},
+    tobu_tojo:{name:'東武東上線（池袋〜小川町）',color:'#0052a0',total:75.0,stations:[
+      {n:'池袋',k:0.0},{n:'北池袋',k:1.5},{n:'下板橋',k:2.5},{n:'大山',k:3.7},{n:'中板橋',k:4.8},{n:'ときわ台',k:5.9},{n:'上板橋',k:7.4},{n:'東武練馬',k:9.5},{n:'下赤塚',k:11.0},{n:'成増',k:12.7},{n:'和光市',k:14.9},{n:'朝霞',k:17.2},{n:'朝霞台',k:19.0},{n:'志木',k:20.5},{n:'柳瀬川',k:22.2},{n:'みずほ台',k:23.6},{n:'鶴瀬',k:24.8},{n:'ふじみ野',k:26.3},{n:'上福岡',k:28.7},{n:'新河岸',k:31.4},{n:'川越',k:33.9},{n:'川越市',k:35.3},{n:'霞ヶ関',k:37.7},{n:'鶴ヶ島',k:40.2},{n:'若葉',k:43.0},{n:'坂戸',k:45.7},{n:'北坂戸',k:47.9},{n:'高坂',k:51.0},{n:'東松山',k:55.2},{n:'森林公園',k:59.2},{n:'小川町',k:75.0}
+    ]},
+    keio:{name:'京王線（新宿〜京王八王子）',color:'#1d2088',total:37.9,stations:[
+      {n:'新宿',k:0.0},{n:'笹塚',k:3.3},{n:'代田橋',k:4.3},{n:'明大前',k:5.5},{n:'下高井戸',k:6.6},{n:'桜上水',k:7.7},{n:'上北沢',k:8.6},{n:'八幡山',k:9.7},{n:'芦花公園',k:10.5},{n:'千歳烏山',k:11.6},{n:'仙川',k:13.4},{n:'つつじヶ丘',k:15.1},{n:'柴崎',k:16.4},{n:'国領',k:17.4},{n:'布田',k:18.2},{n:'調布',k:19.4},{n:'西調布',k:21.4},{n:'飛田給',k:22.6},{n:'武蔵野台',k:24.0},{n:'多磨霊園',k:25.1},{n:'東府中',k:26.3},{n:'府中',k:27.4},{n:'分倍河原',k:29.2},{n:'中河原',k:30.5},{n:'聖蹟桜ヶ丘',k:32.3},{n:'百草園',k:33.8},{n:'高幡不動',k:35.0},{n:'南平',k:36.1},{n:'平山城址公園',k:37.0},{n:'長沼',k:37.9}
+    ]}
+  }},
+  kansai_jr:{label:'関西 JR',lines:{
+    osaka_loop:{name:'JR大阪環状線',color:'#f77f00',total:21.7,stations:[
+      {n:'大阪',k:0.0},{n:'福島',k:1.5},{n:'野田',k:3.0},{n:'西九条',k:4.8},{n:'弁天町',k:6.5},{n:'大正',k:8.1},{n:'芦原橋',k:9.5},{n:'今宮',k:10.6},{n:'新今宮',k:11.3},{n:'天王寺',k:12.5},{n:'寺田町',k:13.5},{n:'桃谷',k:14.6},{n:'鶴橋',k:15.7},{n:'玉造',k:16.9},{n:'森ノ宮',k:17.9},{n:'大阪城公園',k:18.7},{n:'京橋',k:19.5},{n:'桜ノ宮',k:20.5},{n:'天満',k:21.2},{n:'大阪',k:21.7}
+    ]},
+    jrkyoto:{name:'JR京都線（大阪〜京都）',color:'#007b43',total:42.8,stations:[
+      {n:'大阪',k:0.0},{n:'新大阪',k:3.8},{n:'東淀川',k:5.3},{n:'岸辺',k:8.4},{n:'吹田',k:9.6},{n:'千里丘',k:11.4},{n:'茨木',k:14.5},{n:'摂津富田',k:17.1},{n:'高槻',k:20.2},{n:'島本',k:23.7},{n:'山崎',k:26.0},{n:'長岡京',k:29.1},{n:'向日町',k:31.9},{n:'桂川',k:33.9},{n:'西大路',k:36.2},{n:'京都',k:42.8}
+    ]},
+    jrkobe:{name:'JR神戸線（大阪〜神戸）',color:'#0066b3',total:32.1,stations:[
+      {n:'大阪',k:0.0},{n:'塚本',k:3.1},{n:'尼崎',k:7.1},{n:'立花',k:9.8},{n:'甲子園口',k:12.1},{n:'西宮',k:13.7},{n:'さくら夙川',k:15.0},{n:'芦屋',k:17.0},{n:'摂津本山',k:19.3},{n:'住吉',k:21.0},{n:'六甲道',k:22.9},{n:'灘',k:25.8},{n:'三ノ宮',k:27.7},{n:'元町',k:29.0},{n:'神戸',k:30.6},{n:'兵庫',k:32.1}
+    ]},
+    jryamato:{name:'大和路線（JR難波〜加茂）',color:'#e60012',total:61.3,stations:[
+      {n:'JR難波',k:0.0},{n:'今宮',k:2.2},{n:'新今宮',k:2.8},{n:'天王寺',k:4.3},{n:'東部市場前',k:5.8},{n:'加美',k:7.5},{n:'久宝寺',k:9.6},{n:'河内永和',k:11.7},{n:'河内小阪',k:12.7},{n:'八戸ノ里',k:13.7},{n:'若江岩田',k:15.3},{n:'河内花園',k:16.8},{n:'東花園',k:18.0},{n:'俊徳道',k:19.1},{n:'長瀬',k:20.0},{n:'弥刀',k:21.2},{n:'久宝寺',k:22.5},{n:'王寺',k:31.4},{n:'畠田',k:33.3},{n:'志都美',k:35.3},{n:'香芝',k:37.2},{n:'JR五位堂',k:39.5},{n:'高田',k:43.2},{n:'柳本',k:48.9},{n:'天理',k:51.3},{n:'奈良',k:54.9},{n:'郡山',k:58.0},{n:'大和小泉',k:60.1},{n:'法隆寺',k:61.3}
+    ]}
+  }},
+  kansai_private:{label:'関西 私鉄',lines:{
+    hankyu_kyoto:{name:'阪急京都線（梅田〜河原町）',color:'#5d0d7d',total:47.7,stations:[
+      {n:'梅田',k:0.0},{n:'中津',k:1.1},{n:'十三',k:3.0},{n:'南方',k:5.0},{n:'崇禅寺',k:6.1},{n:'淡路',k:7.2},{n:'上新庄',k:8.9},{n:'相川',k:10.5},{n:'正雀',k:11.8},{n:'摂津市',k:13.5},{n:'南茨木',k:15.7},{n:'茨木市',k:17.4},{n:'総持寺',k:18.8},{n:'富田',k:20.1},{n:'高槻市',k:22.3},{n:'上牧',k:24.7},{n:'水無瀬',k:26.6},{n:'大山崎',k:29.0},{n:'長岡天神',k:32.0},{n:'西山天王山',k:33.4},{n:'桂',k:35.6},{n:'洛西口',k:36.8},{n:'東向日',k:38.1},{n:'西向日',k:39.3},{n:'東向日',k:40.7},{n:'烏丸',k:45.5},{n:'大宮',k:46.3},{n:'河原町',k:47.7}
+    ]},
+    hankyu_kobe:{name:'阪急神戸線（梅田〜神戸三宮）',color:'#5d0d7d',total:32.3,stations:[
+      {n:'梅田',k:0.0},{n:'中津',k:1.1},{n:'十三',k:3.0},{n:'神崎川',k:5.7},{n:'園田',k:8.3},{n:'塚口',k:10.8},{n:'武庫之荘',k:13.0},{n:'西宮北口',k:16.5},{n:'夙川',k:19.4},{n:'芦屋川',k:21.3},{n:'岡本',k:23.6},{n:'御影',k:25.5},{n:'王子公園',k:27.7},{n:'春日野道',k:29.4},{n:'神戸三宮',k:32.3}
+    ]},
+    hankyu_takarazuka:{name:'阪急宝塚線（梅田〜宝塚）',color:'#5d0d7d',total:24.5,stations:[
+      {n:'梅田',k:0.0},{n:'中津',k:1.1},{n:'十三',k:3.0},{n:'三国',k:5.0},{n:'庄内',k:6.6},{n:'服部天神',k:8.0},{n:'曽根',k:9.5},{n:'岡町',k:11.0},{n:'豊中',k:12.4},{n:'蛍池',k:14.0},{n:'石橋阪大前',k:15.6},{n:'池田',k:17.6},{n:'川西能勢口',k:20.5},{n:'雲雀丘花屋敷',k:21.9},{n:'山本',k:22.9},{n:'中山観音',k:23.5},{n:'売布神社',k:24.5}
+    ]},
+    kintetsu_nara:{name:'近鉄奈良線（大阪難波〜近鉄奈良）',color:'#e50012',total:26.7,stations:[
+      {n:'大阪難波',k:0.0},{n:'近鉄日本橋',k:0.7},{n:'大阪上本町',k:2.1},{n:'鶴橋',k:3.5},{n:'今里',k:4.9},{n:'布施',k:7.2},{n:'俊徳道',k:8.5},{n:'長瀬',k:9.6},{n:'弥刀',k:11.0},{n:'久宝寺口',k:12.4},{n:'近鉄八尾',k:13.9},{n:'河内山本',k:15.8},{n:'高安',k:17.1},{n:'恩智',k:18.7},{n:'法善寺',k:20.3},{n:'河内国分',k:22.1},{n:'大阪教育大前',k:24.0},{n:'関屋',k:25.4},{n:'二上',k:26.7}
+    ]},
+    keihan:{name:'京阪本線（淀屋橋〜出町柳）',color:'#007a3d',total:57.2,stations:[
+      {n:'淀屋橋',k:0.0},{n:'北浜',k:0.8},{n:'天満橋',k:2.1},{n:'京橋',k:3.4},{n:'野江',k:5.0},{n:'関目',k:6.1},{n:'森小路',k:7.0},{n:'千林',k:7.8},{n:'滝井',k:8.6},{n:'土居',k:9.5},{n:'守口市',k:10.7},{n:'西三荘',k:12.0},{n:'門真市',k:13.3},{n:'古川橋',k:14.7},{n:'大和田',k:16.0},{n:'萱島',k:17.6},{n:'寝屋川市',k:20.0},{n:'香里園',k:22.6},{n:'枚方市',k:27.9},{n:'樟葉',k:32.2},{n:'淀',k:36.6},{n:'中書島',k:39.4},{n:'伏見桃山',k:40.8},{n:'丹波橋',k:42.5},{n:'藤森',k:45.4},{n:'深草',k:46.5},{n:'伏見稲荷',k:48.1},{n:'東福寺',k:49.0},{n:'七条',k:50.3},{n:'清水五条',k:51.7},{n:'祇園四条',k:53.0},{n:'三条',k:54.3},{n:'神宮丸太町',k:55.8},{n:'出町柳',k:57.2}
+    ]},
+    nankai:{name:'南海本線（難波〜和歌山市）',color:'#008000',total:64.2,stations:[
+      {n:'難波',k:0.0},{n:'今宮戎',k:1.0},{n:'新今宮',k:1.7},{n:'天下茶屋',k:3.1},{n:'岸里玉出',k:4.1},{n:'粉浜',k:5.2},{n:'住吉大社',k:6.4},{n:'住ノ江',k:7.7},{n:'七道',k:9.2},{n:'堺',k:11.4},{n:'湊',k:13.5},{n:'石津川',k:14.9},{n:'諏訪ノ森',k:16.0},{n:'浜寺公園',k:17.0},{n:'羽衣',k:18.3},{n:'高石',k:20.0},{n:'北助松',k:21.7},{n:'松ノ浜',k:23.0},{n:'泉大津',k:24.8},{n:'忠岡',k:26.6},{n:'春木',k:28.3},{n:'和泉大宮',k:30.1},{n:'岸和田',k:31.8},{n:'蛸地蔵',k:33.5},{n:'貝塚',k:35.5},{n:'二色浜',k:37.4},{n:'鶴原',k:39.5},{n:'井原里',k:40.8},{n:'泉佐野',k:42.0},{n:'羽倉崎',k:44.2},{n:'吉見ノ里',k:46.0},{n:'岡田浦',k:47.5},{n:'樽井',k:49.3},{n:'尾崎',k:51.3},{n:'鳥取ノ荘',k:53.5},{n:'箱作',k:55.5},{n:'淡輪',k:57.8},{n:'みさき公園',k:59.5},{n:'孝子',k:61.2},{n:'和歌山大学前',k:62.5},{n:'和歌山市',k:64.2}
+    ]}
+  }},
+  tokai:{label:'東海・中部',lines:{
+    tokaido_nagoya:{name:'東海道本線（熱海〜名古屋）',color:'#f77f00',total:195.7,stations:[
+      {n:'熱海',k:0.0},{n:'函南',k:10.5},{n:'三島',k:18.6},{n:'沼津',k:22.1},{n:'片浜',k:25.2},{n:'原',k:28.0},{n:'東田子の浦',k:31.8},{n:'吉原',k:34.1},{n:'富士',k:37.7},{n:'富士川',k:41.5},{n:'新蒲原',k:44.9},{n:'蒲原',k:47.2},{n:'由比',k:51.6},{n:'興津',k:57.8},{n:'清水',k:63.8},{n:'草薙',k:68.5},{n:'東静岡',k:71.1},{n:'静岡',k:74.7},{n:'安倍川',k:78.1},{n:'用宗',k:80.9},{n:'焼津',k:86.0},{n:'西焼津',k:89.4},{n:'藤枝',k:92.5},{n:'六合',k:95.7},{n:'島田',k:98.2},{n:'金谷',k:103.2},{n:'菊川',k:110.1},{n:'掛川',k:117.5},{n:'愛野',k:121.7},{n:'袋井',k:126.5},{n:'磐田',k:133.4},{n:'豊田町',k:137.3},{n:'浜松',k:142.6},{n:'高塚',k:148.2},{n:'舞阪',k:153.4},{n:'弁天島',k:157.5},{n:'新居町',k:160.4},{n:'鷲津',k:163.1},{n:'新所原',k:166.7},{n:'二川',k:171.2},{n:'豊橋',k:176.1},{n:'西小坂井',k:179.9},{n:'愛知御津',k:183.1},{n:'三河大塚',k:186.5},{n:'三河三谷',k:189.9},{n:'蒲郡',k:193.1},{n:'三河塩津',k:194.9},{n:'名古屋',k:195.7}
+    ]},
+    meijo:{name:'名古屋市営地下鉄名城線',color:'#9b1b5a',total:26.4,stations:[
+      {n:'大曽根',k:0.0},{n:'ナゴヤドーム前矢田',k:1.5},{n:'砂田橋',k:2.7},{n:'茶屋ヶ坂',k:4.1},{n:'覚王山',k:5.8},{n:'池下',k:7.0},{n:'今池',k:8.1},{n:'吹上',k:9.1},{n:'御器所',k:10.5},{n:'桜山',k:11.5},{n:'瑞穂区役所',k:12.4},{n:'瑞穂運動場東',k:13.5},{n:'新瑞橋',k:14.7},{n:'堀田',k:15.8},{n:'伝馬町',k:16.9},{n:'神宮西',k:18.0},{n:'西高蔵',k:18.9},{n:'金山',k:19.7},{n:'東別院',k:20.9},{n:'上前津',k:22.0},{n:'矢場町',k:22.9},{n:'栄',k:23.8},{n:'久屋大通',k:24.6},{n:'市役所',k:25.3},{n:'名古屋城',k:25.9},{n:'大曽根',k:26.4}
+    ]},
+    jr_chuo_nagoya:{name:'中央本線（名古屋〜中津川）',color:'#e53935',total:83.3,stations:[
+      {n:'名古屋',k:0.0},{n:'千種',k:3.9},{n:'大曽根',k:5.8},{n:'新守山',k:7.9},{n:'勝川',k:10.1},{n:'春日井',k:12.1},{n:'神領',k:14.3},{n:'高蔵寺',k:17.3},{n:'定光寺',k:22.7},{n:'古虎渓',k:26.0},{n:'多治見',k:31.2},{n:'根本',k:34.2},{n:'姫',k:37.7},{n:'釜戸',k:41.0},{n:'武并',k:44.1},{n:'恵那',k:50.2},{n:'美乃坂本',k:54.0},{n:'中津川',k:61.0}
+    ]},
+    meitetsu_nagoya:{name:'名鉄名古屋本線（豊橋〜名鉄岐阜）',color:'#e60012',total:99.8,stations:[
+      {n:'豊橋',k:0.0},{n:'伊奈',k:5.6},{n:'小田渕',k:7.9},{n:'国府',k:10.3},{n:'御油',k:12.5},{n:'名電赤坂',k:14.1},{n:'名電長沢',k:16.5},{n:'本宿',k:18.6},{n:'名電山中',k:22.0},{n:'藤川',k:25.4},{n:'男川',k:27.5},{n:'東岡崎',k:31.0},{n:'岡崎公園前',k:32.0},{n:'矢作橋',k:34.0},{n:'宇頭',k:36.8},{n:'新安城',k:39.9},{n:'牛田',k:41.7},{n:'知立',k:44.3},{n:'一ツ木',k:46.7},{n:'富士松',k:48.6},{n:'豊明',k:51.3},{n:'前後',k:53.0},{n:'中京競馬場前',k:54.9},{n:'有松',k:57.4},{n:'左京山',k:59.2},{n:'神宮前',k:61.8},{n:'金山',k:64.5},{n:'山王',k:65.9},{n:'名鉄名古屋',k:68.0},{n:'栄生',k:69.3},{n:'東枇杷島',k:71.2},{n:'西枇杷島',k:73.0},{n:'二ツ杁',k:74.3},{n:'新川橋',k:75.3},{n:'須ヶ口',k:77.0},{n:'丸ノ内',k:78.7},{n:'新清洲',k:80.8},{n:'大里',k:83.6},{n:'奥田',k:85.9},{n:'国府宮',k:88.9},{n:'島氏永',k:90.8},{n:'妙興寺',k:92.3},{n:'名鉄一宮',k:94.1},{n:'今伊勢',k:96.4},{n:'石刀',k:97.5},{n:'新木曽川',k:98.5},{n:'名鉄岐阜',k:99.8}
+    ]}
+  }},
+  national:{label:'全国・新幹線',lines:{
+    tokaido_shinkansen:{name:'東海道新幹線（東京〜新大阪）',color:'#0052a0',total:515.4,stations:[
+      {n:'東京',k:0.0},{n:'品川',k:6.8},{n:'新横浜',k:28.8},{n:'小田原',k:83.9},{n:'熱海',k:104.6},{n:'三島',k:120.7},{n:'新富士',k:140.3},{n:'静岡',k:167.4},{n:'掛川',k:211.3},{n:'浜松',k:238.0},{n:'豊橋',k:274.2},{n:'三河安城',k:305.0},{n:'名古屋',k:342.0},{n:'岐阜羽島',k:367.1},{n:'米原',k:407.0},{n:'京都',k:476.3},{n:'新大阪',k:515.4}
+    ]},
+    sanyo_shinkansen:{name:'山陽新幹線（新大阪〜博多）',color:'#0052a0',total:622.3,stations:[
+      {n:'新大阪',k:0.0},{n:'新神戸',k:36.9},{n:'西明石',k:61.8},{n:'姫路',k:87.9},{n:'相生',k:107.5},{n:'岡山',k:180.3},{n:'新倉敷',k:207.9},{n:'福山',k:239.2},{n:'新尾道',k:260.4},{n:'三原',k:279.2},{n:'東広島',k:316.1},{n:'広島',k:341.6},{n:'新岩国',k:374.0},{n:'徳山',k:415.6},{n:'新山口',k:459.4},{n:'厚狭',k:494.5},{n:'新下関',k:519.9},{n:'小倉',k:571.3},{n:'博多',k:622.3}
+    ]},
+    tohoku_shinkansen:{name:'東北新幹線（東京〜新青森）',color:'#00944e',total:713.7,stations:[
+      {n:'東京',k:0.0},{n:'上野',k:3.6},{n:'大宮',k:30.3},{n:'小山',k:80.6},{n:'宇都宮',k:109.5},{n:'那須塩原',k:157.8},{n:'新白河',k:185.4},{n:'郡山',k:226.7},{n:'福島',k:272.8},{n:'白石蔵王',k:303.6},{n:'仙台',k:351.8},{n:'古川',k:395.8},{n:'くりこま高原',k:416.2},{n:'一ノ関',k:445.8},{n:'水沢江刺',k:470.1},{n:'北上',k:487.5},{n:'新花巻',k:500.0},{n:'盛岡',k:535.3},{n:'いわて沼宮内',k:566.8},{n:'二戸',k:601.3},{n:'八戸',k:631.9},{n:'七戸十和田',k:668.0},{n:'新青森',k:713.7}
+    ]},
+    tokaido_main:{name:'東海道本線（東京〜神戸）',color:'#f77f00',total:589.5,stations:[
+      {n:'東京',k:0.0},{n:'品川',k:6.8},{n:'川崎',k:18.2},{n:'横浜',k:28.8},{n:'大船',k:46.5},{n:'藤沢',k:53.2},{n:'茅ヶ崎',k:61.2},{n:'平塚',k:66.0},{n:'小田原',k:87.3},{n:'熱海',k:104.6},{n:'三島',k:120.7},{n:'沼津',k:124.9},{n:'富士',k:142.5},{n:'清水',k:166.7},{n:'静岡',k:180.2},{n:'藤枝',k:198.3},{n:'掛川',k:225.0},{n:'浜松',k:257.1},{n:'豊橋',k:293.6},{n:'岡崎',k:326.5},{n:'刈谷',k:334.7},{n:'大府',k:340.4},{n:'金山',k:348.0},{n:'名古屋',k:366.0},{n:'尾張一宮',k:379.6},{n:'岐阜',k:396.3},{n:'大垣',k:412.8},{n:'関ヶ原',k:427.7},{n:'米原',k:445.9},{n:'彦根',k:456.3},{n:'能登川',k:464.2},{n:'近江八幡',k:470.4},{n:'野洲',k:478.4},{n:'守山',k:481.7},{n:'草津',k:487.9},{n:'石山',k:492.6},{n:'大津',k:497.4},{n:'山科',k:501.5},{n:'京都',k:513.6},{n:'西大路',k:520.2},{n:'向日町',k:524.7},{n:'長岡京',k:529.5},{n:'山崎',k:532.5},{n:'島本',k:534.9},{n:'高槻',k:541.0},{n:'茨木',k:548.2},{n:'吹田',k:552.7},{n:'新大阪',k:556.4},{n:'大阪',k:556.4},{n:'尼崎',k:563.7},{n:'西宮',k:569.9},{n:'芦屋',k:573.8},{n:'神戸',k:589.5}
+    ]},
+    jr_kyushu:{name:'鹿児島本線（博多〜鹿児島）',color:'#e60012',total:297.6,stations:[
+      {n:'博多',k:0.0},{n:'竹下',k:3.5},{n:'笹原',k:5.7},{n:'南福岡',k:7.6},{n:'春日',k:9.0},{n:'大野城',k:10.5},{n:'水城',k:12.4},{n:'都府楼南',k:14.3},{n:'二日市',k:16.6},{n:'天拝山',k:18.5},{n:'原田',k:22.0},{n:'基山',k:26.1},{n:'けやき台',k:28.4},{n:'弥生が丘',k:30.2},{n:'鳥栖',k:33.3},{n:'肥前麓',k:37.3},{n:'中原',k:40.8},{n:'吉野ヶ里公園',k:45.2},{n:'神崎',k:48.2},{n:'伊賀屋',k:51.9},{n:'久保田',k:55.8},{n:'佐賀',k:60.9},{n:'鍋島',k:66.0},{n:'バルーンさが',k:68.5},{n:'諸富',k:71.2},{n:'筑後船小屋',k:87.2},{n:'羽犬塚',k:95.8},{n:'瀬高',k:103.4},{n:'南瀬高',k:108.0},{n:'渡瀬',k:113.0},{n:'吉野',k:118.5},{n:'銀水',k:121.5},{n:'大牟田',k:124.0},{n:'荒尾',k:130.2},{n:'玉名',k:139.5},{n:'肥後伊倉',k:146.2},{n:'木葉',k:152.0},{n:'田原坂',k:157.5},{n:'植木',k:163.2},{n:'西里',k:167.3},{n:'熊本',k:172.4},{n:'川尻',k:183.6},{n:'宇土',k:191.2},{n:'松橋',k:201.5},{n:'小川',k:211.0},{n:'有佐',k:218.0},{n:'千丁',k:223.0},{n:'新八代',k:232.5},{n:'八代',k:238.6},{n:'肥後高田',k:244.0},{n:'白石',k:249.5},{n:'佐敷',k:258.5},{n:'津奈木',k:263.0},{n:'水俣',k:267.5},{n:'袋',k:273.0},{n:'米ノ津',k:278.0},{n:'出水',k:283.5},{n:'西出水',k:286.0},{n:'薩摩大川',k:289.5},{n:'高尾野',k:293.0},{n:'野田郷',k:295.5},{n:'鹿児島',k:297.6}
+    ]}
+  }}
+};
+
+// ============================================================
+// State
+// ============================================================
+let ST = {
+  line: null, region: 'kanto_jr',
+  km: 0, logs: [], stride: 75,
+  walking: false, walkStart: null, walkTimer: null,
+  startSteps: null,
+};
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem('rwt3')||'{}');
+    ST.line = s.line||null; ST.region = s.region||'kanto_jr';
+    ST.km = s.km||0; ST.logs = s.logs||[]; ST.stride = s.stride||75;
+  } catch(e){}
+}
+function save() {
+  try { localStorage.setItem('rwt3', JSON.stringify({line:ST.line,region:ST.region,km:ST.km,logs:ST.logs,stride:ST.stride})); } catch(e){}
+}
+
+function getLine(k) {
+  for (const r of Object.values(REGIONS)) if (r.lines[k]) return r.lines[k];
+  return null;
+}
+function getCurrent(line, km) {
+  const s = line.stations;
+  for (let i = s.length-1; i >= 0; i--) {
+    if (km >= s[i].k) return {p:s[i], n:s[i+1]||null, idx:i};
+  }
+  return {p:s[0], n:s[1]||null, idx:0};
+}
+function steps2km(steps) { return (steps * ST.stride) / 100000; }
+
+// ============================================================
+// タブ
+// ============================================================
+function switchTab(name, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if (name==='home') renderHome();
+  if (name==='lines') renderLines();
+  if (name==='log') renderLog();
+  if (name==='settings') {
+    document.getElementById('strideInput').value = ST.stride;
+    document.getElementById('currentStride').textContent = ST.stride;
+    document.getElementById('appUrlBlock').textContent = window.location.href;
+  }
+}
+
+// ============================================================
+// ホーム
+// ============================================================
+function renderHome() {
+  const line = ST.line ? getLine(ST.line) : null;
+  document.getElementById('selectedLineName').textContent =
+    line ? line.name : '路線未選択 — 「路線」タブから選んでください';
+  const noMsg = document.getElementById('noLineMsg');
+  const locSec = document.getElementById('locationSection');
+  if (!line) { noMsg.style.display='block'; locSec.style.display='none'; return; }
+  noMsg.style.display='none'; locSec.style.display='block';
+
+  const km = ST.km;
+  const {p, n} = getCurrent(line, km);
+
+  if (km >= line.total) {
+    document.getElementById('locStation').textContent = '🎉 完走！';
+    document.getElementById('locNext').textContent = `${line.name} ${line.total}km 完全踏破！`;
+  } else if (n) {
+    document.getElementById('locStation').textContent = `${p.n} → ${n.n}`;
+    document.getElementById('locNext').innerHTML = `次の <strong>${n.n}</strong> まであと <strong>${(n.k-km).toFixed(1)} km</strong>`;
+  } else {
+    document.getElementById('locStation').textContent = p.n;
+    document.getElementById('locNext').textContent = '終点';
+  }
+
+  const passed = line.stations.filter(s=>km>=s.k).length;
+  document.getElementById('statKm').textContent = km.toFixed(1);
+  document.getElementById('statStn').textContent = passed;
+  document.getElementById('statDays').textContent = ST.logs.length;
+
+  const pct = Math.min(100,(km/line.total)*100);
+  document.getElementById('progFill').style.width = pct.toFixed(1)+'%';
+  document.getElementById('progPct').textContent = pct.toFixed(1)+'%';
+  document.getElementById('progName').textContent = line.name+' 進捗';
+  document.getElementById('progSub').textContent = `${km.toFixed(1)} km / ${line.total} km`;
+
+  renderStations(line, km);
+}
+
+function renderStations(line, km) {
+  const {idx} = getCurrent(line, km);
+  const el = document.getElementById('stationList');
+  el.innerHTML = line.stations.map((s,i) => {
+    const passed = km > s.k;
+    const cur = i===idx && km < line.total;
+    let cls = 'stn-item' + (passed&&!cur?' passed':'') + (cur?' current':'');
+    let badge = cur ? '<span class="stn-badge badge-cur">現在地</span>' :
+                passed ? '<span class="stn-badge badge-pass">通過</span>' : '';
+    return `<div class="${cls}"><div class="stn-dot"></div><div class="stn-name">${s.n}</div><div class="stn-km">${s.k.toFixed(1)}km</div>${badge}</div>`;
+  }).join('');
+  setTimeout(()=>{
+    const c = el.querySelector('.current') || el.querySelector('.passed:last-of-type');
+    if(c) c.scrollIntoView({block:'nearest',behavior:'smooth'});
+  },100);
+}
+
+// ============================================================
+// 路線選択
+// ============================================================
+function renderLines() {
+  const tabs = document.getElementById('regionTabs');
+  tabs.innerHTML = Object.entries(REGIONS).map(([k,r])=>
+    `<button class="region-tab ${ST.region===k?'active':''}" onclick="selRegion('${k}')">${r.label}</button>`
+  ).join('');
+
+  const list = document.getElementById('lineList');
+  const region = REGIONS[ST.region];
+  list.innerHTML = Object.entries(region.lines).map(([k,l])=>
+    `<div class="line-item ${ST.line===k?'selected':''}" onclick="selLine('${k}')">
+      <div class="line-color-dot" style="background:${l.color}"></div>
+      <div class="line-info"><div class="line-name-text">${l.name}</div><div class="line-meta">${l.stations.length}駅 / ${l.total}km</div></div>
+      <div class="line-check">✓</div>
+    </div>`
+  ).join('');
+}
+
+function selRegion(k) { ST.region=k; save(); renderLines(); }
+function selLine(k) {
+  ST.line=k; save(); renderLines(); renderHome();
+  toast(`「${getLine(k).name}」を選択しました`);
+}
+
+// ============================================================
+// ウォーキング（タイマー）
+// ============================================================
+function toggleWalk() {
+  ST.walking ? stopWalk() : startWalk();
+}
+function startWalk() {
+  ST.walking=true; ST.walkStart=Date.now();
+  const btn=document.getElementById('startBtn');
+  btn.classList.add('active');
+  document.getElementById('startIcon').textContent='⏹️';
+  document.getElementById('startLabel').textContent='停止';
+  document.getElementById('walkStatus').textContent='記録中...';
+  document.getElementById('timerDisplay').classList.add('show');
+  document.getElementById('stepLive').classList.add('show');
+  ST.walkTimer = setInterval(()=>{
+    const e=Date.now()-ST.walkStart;
+    const m=Math.floor(e/60000).toString().padStart(2,'0');
+    const s=Math.floor((e%60000)/1000).toString().padStart(2,'0');
+    document.getElementById('timerDisplay').textContent=`${m}:${s}`;
+  },1000);
+}
+function stopWalk() {
+  ST.walking=false; clearInterval(ST.walkTimer);
+  const btn=document.getElementById('startBtn');
+  btn.classList.remove('active');
+  document.getElementById('startIcon').textContent='🚶';
+  document.getElementById('startLabel').textContent='開始';
+  document.getElementById('walkStatus').textContent='タップして開始';
+  document.getElementById('timerDisplay').classList.remove('show');
+  document.getElementById('stepLive').classList.remove('show');
+  document.getElementById('stepVal').textContent='—';
+  const e=Date.now()-ST.walkStart;
+  const m=Math.floor(e/60000), s=Math.floor((e%60000)/1000);
+  toast(`${m}分${s}秒のウォーキングを終了。距離は手動または設定タブで入力してください。`);
+}
+
+// ============================================================
+// 記録
+// ============================================================
+function addManual() {
+  const v=parseFloat(document.getElementById('kmInput').value);
+  const m=document.getElementById('memoInput').value.trim();
+  if(!v||v<=0){document.getElementById('kmInput').focus();return;}
+  record(v, m||null);
+  document.getElementById('kmInput').value='';
+  document.getElementById('memoInput').value='';
+}
+
+function record(km, memo) {
+  const now=new Date();
+  const d=now.toLocaleDateString('ja-JP',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  ST.km = Math.round((ST.km+km)*100)/100;
+  ST.logs.push({km,memo,date:d});
+  save(); renderHome();
+  toast(`+${km.toFixed(2)}km を記録しました！`);
+}
+
+// ============================================================
+// URL Parameter / Shortcuts連携
+// ============================================================
+function handleURL() {
+  // URLパラメータとハッシュの両方に対応
+  let search = window.location.search;
+  let hash = window.location.hash;
+
+  // ハッシュにパラメータが含まれている場合も処理
+  let p = new URLSearchParams(search);
+  if (!p.get('action') && hash.includes('action=')) {
+    p = new URLSearchParams(hash.replace('#','').replace(/^.*\?/,''));
+  }
+
+  const action = p.get('action');
+  const stepsRaw = p.get('steps');
+  const steps = stepsRaw ? Math.round(parseFloat(stepsRaw)) : 0;
+
+  if (!action || !steps || steps <= 0) return;
+
+  if (action==='start') {
+    // 開始歩数をlocalStorageに保存（ページを閉じても残る）
+    localStorage.setItem('rwt3_start', steps.toString());
+    localStorage.setItem('rwt3_start_time', Date.now().toString());
+    toast(`✅ 開始歩数を記録しました（${steps.toLocaleString()}歩）\nウォーキング後に停止ショートカットを実行してください`);
+  } else if (action==='stop') {
+    const startSteps = parseInt(localStorage.getItem('rwt3_start')||'0');
+    const startTime = parseInt(localStorage.getItem('rwt3_start_time')||'0');
+
+    if (startSteps === 0) {
+      toast('⚠️ 開始歩数が記録されていません。先に「鉄道ウォーク開始」を実行してください。');
+      return;
+    }
+
+    const diff = steps - startSteps;
+
+    if (diff <= 0) {
+      toast(`⚠️ 歩数の差分が0以下です。\n開始:${startSteps.toLocaleString()}歩 → 停止:${steps.toLocaleString()}歩\n先に「開始」ショートカットを実行してください。`);
+      return;
+    }
+
+    const km = steps2km(diff);
+    const mins = startTime ? Math.round((Date.now()-startTime)/60000) : 0;
+    const memo = mins > 0
+      ? `Shortcuts自動記録（${diff.toLocaleString()}歩 / 約${mins}分）`
+      : `Shortcuts自動記録（${diff.toLocaleString()}歩）`;
+
+    record(km, memo);
+    localStorage.removeItem('rwt3_start');
+    localStorage.removeItem('rwt3_start_time');
+  }
+
+  // URLパラメータをクリア（履歴を汚さない）
+  history.replaceState({}, '', window.location.pathname);
+}
+
+// ============================================================
+// ログ
+// ============================================================
+function renderLog() {
+  const c=document.getElementById('logContainer');
+  document.getElementById('logSubtitle').textContent =
+    ST.logs.length ? `${ST.logs.length}件 / 累計${ST.km.toFixed(1)}km` : '記録なし';
+  if(!ST.logs.length){
+    c.innerHTML='<div class="empty"><div class="empty-icon">🚶</div><div class="empty-txt">まだ記録がありません</div></div>';
+    return;
+  }
+  c.innerHTML=[...ST.logs].reverse().map(l=>
+    `<div class="log-item"><div><div class="log-memo">${l.memo||'歩行記録'}</div><div class="log-date">${l.date}</div></div><div class="log-km">+${l.km.toFixed(2)}km</div></div>`
+  ).join('');
+}
+
+function resetAll() {
+  if(!confirm('すべてリセットしますか？')) return;
+  ST.km=0; ST.logs=[]; save(); renderHome(); renderLog();
+  toast('リセットしました');
+}
+function undoLast() {
+  if(!ST.logs.length){toast('記録がありません');return;}
+  const last=ST.logs.pop();
+  ST.km=Math.max(0,Math.round((ST.km-last.km)*100)/100);
+  save(); renderHome(); renderLog();
+  toast(`${last.km.toFixed(2)}km の記録を取り消しました`);
+}
+
+// ============================================================
+// 設定
+// ============================================================
+function saveStride() {
+  const v=parseFloat(document.getElementById('strideInput').value);
+  if(!v||v<30||v>120){toast('30〜120cmの範囲で入力してください');return;}
+  ST.stride=v; save();
+  document.getElementById('currentStride').textContent=v;
+  toast(`歩幅を ${v}cm に設定しました`);
+}
+
+function testRecord() {
+  const s=parseInt(document.getElementById('testStart').value);
+  const e=parseInt(document.getElementById('testStop').value);
+  if(isNaN(s)||isNaN(e)||e<=s){toast('停止歩数 > 開始歩数 で入力してください');return;}
+  const diff=e-s;
+  const km=steps2km(diff);
+  record(km, `テスト（${diff.toLocaleString()}歩）`);
+}
+
+// テストプレビュー
+['testStart','testStop'].forEach(id=>{
+  document.getElementById(id).addEventListener('input',()=>{
+    const s=parseInt(document.getElementById('testStart').value)||0;
+    const e=parseInt(document.getElementById('testStop').value)||0;
+    const diff=Math.max(0,e-s);
+    const km=steps2km(diff);
+    document.getElementById('testPreview').textContent=
+      diff>0?`差分: ${diff.toLocaleString()}歩 ≈ ${km.toFixed(2)}km`:'差分: — 歩 ≈ — km';
+  });
+});
+
+// コピー機能
+function copyText(el, text) {
+  navigator.clipboard.writeText(text).then(()=>{
+    const orig=el.style.borderColor;
+    el.style.borderColor='var(--green)';
+    toast('コピーしました！');
+    setTimeout(()=>el.style.borderColor=orig,1000);
+  }).catch(()=>{
+    const r=document.createRange();r.selectNode(el);
+    window.getSelection().removeAllRanges();window.getSelection().addRange(r);
+    toast('テキストを選択しました。長押しでコピーしてください。');
+  });
+}
+function copyAppUrl(el) { copyText(el, window.location.href); }
+
+// ============================================================
+// トースト
+// ============================================================
+let _tt;
+function toast(msg) {
+  let t=document.getElementById('_toast');
+  if(!t){
+    t=document.createElement('div');t.id='_toast';
+    t.style.cssText='position:fixed;bottom:calc(80px + env(safe-area-inset-bottom) + 12px);left:50%;transform:translateX(-50%);background:#1e1e40;border:1px solid rgba(255,255,255,0.15);color:#f0f0ff;border-radius:12px;padding:10px 18px;font-size:13px;z-index:999;white-space:nowrap;transition:opacity 0.3s;max-width:90vw;white-space:normal;text-align:center;';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(_tt);_tt=setTimeout(()=>t.style.opacity='0',3500);
+}
+
+// ============================================================
+// 初期化
+// ============================================================
+load();
+renderHome();
+handleURL();
+</script>
+</body>
+</html>
