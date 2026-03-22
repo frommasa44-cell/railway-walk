@@ -897,6 +897,22 @@ function toast(msg) {
 load();
 renderHome();
 handleURL();
+
+// ページが再表示された時（Shortcutsから戻った時）もURLを処理
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    handleURL();
+  }
+});
+
+// iOSのpageshowイベントにも対応（キャッシュから復元された場合）
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) {
+    load();
+    renderHome();
+    handleURL();
+  }
+});
 </script>
 </body>
 </html>
