@@ -744,60 +744,80 @@ function record(km, memo) {
   toast(`+${km.toFixed(2)}km を記録しました！`);
 }
 
+// ページ読み込み時にpending recordがあれば自動記録する
+function checkPendingRecord() {
+  const pendingKm = localStorage.getItem('rwt3_pending_km');
+  const pendingMemo = localStorage.getItem('rwt3_pending_memo');
+  if (!pendingKm) return;
+
+  localStorage.removeItem('rwt3_pending_km');
+  localStorage.removeItem('rwt3_pending_memo');
+
+  const km = parseFloat(pendingKm);
+  if (km > 0) {
+    // 少し遅らせてUIが準備できてから記録
+    setTimeout(() => {
+      record(km, pendingMemo || 'Shortcuts自動記録');
+    }, 500);
+  }
+}
+
 // ============================================================
 // URL Parameter / Shortcuts連携
 // ============================================================
 function handleURL() {
-  // URLパラメータとハッシュの両方に対応
-  let search = window.location.search;
-  let hash = window.location.hash;
-
-  // ハッシュにパラメータが含まれている場合も処理
-  let p = new URLSearchParams(search);
-  if (!p.get('action') && hash.includes('action=')) {
-    p = new URLSearchParams(hash.replace('#','').replace(/^.*\?/,''));
-  }
+  let p = new URLSearchParams(window.location.search);
 
   const action = p.get('action');
   const stepsRaw = p.get('steps');
   const steps = stepsRaw ? Math.round(parseFloat(stepsRaw)) : 0;
 
-  if (!action || !steps || steps <= 0) return;
+  if (!action || !steps || steps <= 0) {
+    // URLパラメータがない場合でも、pending recordがあれば処理する
+    checkPendingRecord();
+    return;
+  }
 
   if (action==='start') {
-    // 開始歩数をlocalStorageに保存（ページを閉じても残る）
+    // 開始歩数と時刻をlocalStorageに保存
     localStorage.setItem('rwt3_start', steps.toString());
     localStorage.setItem('rwt3_start_time', Date.now().toString());
-    toast(`✅ 開始歩数を記録しました（${steps.toLocaleString()}歩）\nウォーキング後に停止ショートカットを実行してください`);
+    toast(`✅ 開始：${steps.toLocaleString()}歩を記録しました\nウォーキング後に停止ショートカットを実行してください`);
+
   } else if (action==='stop') {
     const startSteps = parseInt(localStorage.getItem('rwt3_start')||'0');
     const startTime = parseInt(localStorage.getItem('rwt3_start_time')||'0');
 
     if (startSteps === 0) {
-      toast('⚠️ 開始歩数が記録されていません。先に「鉄道ウォーク開始」を実行してください。');
+      toast('⚠️ 開始歩数がありません。先に「鉄道ウォーク開始」を実行してください。');
+      history.replaceState({}, '', window.location.pathname);
       return;
     }
 
     const diff = steps - startSteps;
-
     if (diff <= 0) {
-      toast(`⚠️ 歩数の差分が0以下です。\n開始:${startSteps.toLocaleString()}歩 → 停止:${steps.toLocaleString()}歩\n先に「開始」ショートカットを実行してください。`);
+      toast(`⚠️ 歩数差分が0以下です\n開始:${startSteps.toLocaleString()}歩 → 停止:${steps.toLocaleString()}歩`);
+      history.replaceState({}, '', window.location.pathname);
       return;
     }
 
     const km = steps2km(diff);
     const mins = startTime ? Math.round((Date.now()-startTime)/60000) : 0;
     const memo = mins > 0
-      ? `Shortcuts自動記録（${diff.toLocaleString()}歩 / 約${mins}分）`
-      : `Shortcuts自動記録（${diff.toLocaleString()}歩）`;
+      ? `Shortcuts（${diff.toLocaleString()}歩 / 約${mins}分）`
+      : `Shortcuts（${diff.toLocaleString()}歩）`;
 
-    record(km, memo);
+    // pending recordとしてlocalStorageに保存してからページをリロード
+    localStorage.setItem('rwt3_pending_km', km.toString());
+    localStorage.setItem('rwt3_pending_memo', memo);
     localStorage.removeItem('rwt3_start');
     localStorage.removeItem('rwt3_start_time');
   }
 
-  // URLパラメータをクリア（履歴を汚さない）
-  history.replaceState({}, '', window.location.pathname);
+  // URLパラメータをクリアしてリロード（データを確実に反映させる）
+  const cleanUrl = window.location.pathname;
+  history.replaceState({}, '', cleanUrl);
+  location.reload();
 }
 
 // ============================================================
